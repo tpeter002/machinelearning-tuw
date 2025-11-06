@@ -43,10 +43,15 @@ class Preprocessing():
         """
         # encode gender to binary values
         df['Gender'] = df['Gender'].map({'Male': 1, 'Female': 0})
+        # one hot encode workout_type
+        one_hot_workout = pd.get_dummies(df['Workout_Type'])
+        df = df.drop(columns=['Workout_Type'])
+        df = df.join(one_hot_workout)
+
 
         # seperate features from target
-        X = df.drop('Workout_Type', axis=1)
-        y = df['Workout_Type']
+        X = df.drop('Experience_Level', axis=1)
+        y = df['Experience_Level']
 
         # encode labels
         y = self.le.fit_transform(y)
