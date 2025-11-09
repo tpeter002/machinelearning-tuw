@@ -13,8 +13,9 @@ class Preprocessing():
     """
 
     def __init__(self):
-        self.le = LabelEncoder()
         self.scaler = StandardScaler()
+        self.le = LabelEncoder()
+        self.labels = None
 
     def load_data(self, download_path:str = PATH):
         """
@@ -33,7 +34,7 @@ class Preprocessing():
 
         return df
 
-    def preprocess_data(self, df:pd.DataFrame, split:bool = True, scale:bool=False):
+    def preprocess_data(self, df:pd.DataFrame, split:bool = True, scale:bool=False, encode_labels:bool=False):
         """
         preprocessing data
         split: bool - whether split data or don't
@@ -53,8 +54,11 @@ class Preprocessing():
         X = df.drop('Experience_Level', axis=1)
         y = df['Experience_Level']
 
-        # encode labels
-        y = self.le.fit_transform(y)
+        # store labels
+        self.labels = [str(label) for label in sorted(y.unique())]
+
+        if encode_labels:
+            y = self.le.fit_transform(y)
 
         if split:
             X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
@@ -67,13 +71,13 @@ class Preprocessing():
         
         return X, y
 
-    def pipeline(self, download_path, split, scale):
+    def pipeline(self, download_path, split, scale, encode_labels):
         """
         run the whole thing at once
         """
         df = self.load_data(download_path)
         df = self.feature_engineering(df)
-        return self.preprocess_data(df, split=split, scale=scale)
+        return self.preprocess_data(df, split=split, scale=scale, encode_labels=encode_labels)
 
 def main():
     pp = Preprocessing()

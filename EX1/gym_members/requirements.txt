@@ -5,3 +5,4 @@ numpy==2.3.4
 kagglehub==0.3.13
 matplotlib==3.10.7
 seaborn==0.13.2
+scikeras==0.13.0
