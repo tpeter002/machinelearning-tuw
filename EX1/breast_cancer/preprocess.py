@@ -59,7 +59,7 @@ class Preprocessing():
         
         # Some columns have leading whitspaces
         df.columns = df.columns.str.strip()
-        # Removing columns that cause multicollinearitys
+        # Removing columns that cause multicollinearity
         df = df.drop(columns=['perimeterMean', 'areaMean', 'perimeterWorst', 'areaWorst', 'perimeterStdErr', 'areaStdErr', 'concavePointsMean', 'textureWorst', 'radiusMean'], axis = 1)
         
         X = df.drop(['ID', 'class'], axis=1)

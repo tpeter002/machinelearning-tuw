@@ -65,3 +65,30 @@ def get_cross_validation_scores(model, X_train, y_train, cv=10, scoring = 'f1_we
     print(f"{cv}-Fold CV Scores: {validation_scores}")
     print(f"Average {scoring} Score: {validation_scores.mean():.4f}")
     print(f"Standard Deviation: {validation_scores.std():.4f}")
+    
+def save_results_to_csv(model, pp, test_path, target_path, scaled = True, ridge = False):
+    df_test = pd.read_csv(test_path)
+    # Some columns have leading whitspaces
+    df_test.columns = df_test.columns.str.strip()
+    # Removing columns that cause multicollinearity
+    df_test = df_test.drop(columns=['perimeterMean', 'areaMean', 'perimeterWorst', 'areaWorst', 'perimeterStdErr', 'areaStdErr', 'concavePointsMean', 'textureWorst', 'radiusMean'], axis = 1)
+    
+    ids = df_test['ID']
+    X = df_test.drop(['ID'], axis=1)
+    if(scaled):
+        # Apply the scaler to the test set
+        X = pp.scaler.transform(X)
+    # Get predictions
+    preds = model.predict(X)
+
+    # df for the results
+    df_result = pd.DataFrame()
+    df_result['ID'] = ids
+    df_result['class'] = preds
+    
+    if ridge:
+        df_result['class'] = df_result['class'].map({-1: 'false', 1: 'true'})
+    else:    
+        df_result['class'] = df_result['class'].map({0: 'false', 1: 'true'})
+        
+    df_result.to_csv(target_path, index=False)
