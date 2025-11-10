@@ -1,6 +1,6 @@
 from pathlib import Path
 from typing import Optional, Tuple, Union
-
+import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import RobustScaler
@@ -42,7 +42,6 @@ def preprocess_loan_features(
     *,
     exclude_cols: Optional[Tuple[str, ...]] = ("grade", "ID"),
 ) -> pd.DataFrame:
-    # Work on a copy to avoid mutating caller's DataFrame
     out = df.copy()
 
     def _norm_str(s: pd.Series) -> pd.Series:
@@ -54,7 +53,7 @@ def preprocess_loan_features(
         months = pd.to_numeric(s.str.extract(r"(\d+)", expand=False), errors="coerce")
         out["term"] = (months >= 60).fillna(0).astype(int)
 
-    #  emp_length: keep only the numeric years; "< 1 year" -> 0, "10+ years" -> 10, NaN stays NaN
+    # emp_length: "< 1 year" -> 0, "10+ years" -> 10, NaN stays NaN
     if "emp_length" in out.columns:
         s = _norm_str(out["emp_length"])
         years = pd.to_numeric(s.str.extract(r"(\d+)", expand=False), errors="coerce")
@@ -62,72 +61,55 @@ def preprocess_loan_features(
         years = years.mask(lt_one_mask, 0)
         out["emp_length"] = years
 
-    #  home_ownership: map to integers (unseen -> -1)
+    # home_ownership: map to integers (unseen -> -1)
     if "home_ownership" in out.columns:
         s = _norm_str(out["home_ownership"])
-        mapping = {
-            "mortgage": 0,
-            "rent": 1,
-            "own": 2,
-        }
+        mapping = {"mortgage": 0, "rent": 1, "own": 2}
         out["home_ownership"] = s.map(mapping).fillna(-1).astype(int)
 
-    #  verification_status: map to integers (unseen -> -1)
+    # verification_status: map to integers (unseen -> -1)
     if "verification_status" in out.columns:
         s = _norm_str(out["verification_status"])
-        mapping = {
-            "not verified": 0,
-            "source verified": 1,
-            "verified": 2,
-        }
+        mapping = {"not verified": 0, "source verified": 1, "verified": 2}
         out["verification_status"] = s.map(mapping).fillna(-1).astype(int)
 
     # loan_status: map to integers (unseen -> -1)
     if "loan_status" in out.columns:
         s = _norm_str(out["loan_status"])
-        mapping = {
-            "current": 0,
-            "fully paid": 1,
-            "charged off": 2,
-        }
+        mapping = {"current": 0, "fully paid": 1, "charged off": 2}
         out["loan_status"] = s.map(mapping).fillna(-1).astype(int)
 
-    # pymnt_plan: typically "n" or "y" -> binary (y=1, n=0)
+    # pymnt_plan: "y"/"n" -> 1/0
     if "pymnt_plan" in out.columns:
         s = _norm_str(out["pymnt_plan"])
         mapping = {"y": 1, "n": 0}
         out["pymnt_plan"] = s.map(mapping).fillna(0).astype(int)
 
-    #  purpose: low cardinality -> encode to stable category codes
+    # purpose: encode to stable category codes
     if "purpose" in out.columns:
         s = _norm_str(out["purpose"])
         cat = pd.Categorical(s)
         out["purpose"] = pd.Series(cat.codes, index=out.index).astype(int)
 
-    #  addr_state: encode to category codes
+    # addr_state: encode to category codes
     if "addr_state" in out.columns:
         s = _norm_str(out["addr_state"])
         cat = pd.Categorical(s)
         out["addr_state"] = pd.Series(cat.codes, index=out.index).astype(int)
 
-    # initial_list_status: "w"/"f" -> binary (w=1, f=0, else -1)
+    # initial_list_status: "w"/"f" -> 1/0 (else -1)
     if "initial_list_status" in out.columns:
         s = _norm_str(out["initial_list_status"])
         mapping = {"w": 1, "f": 0}
         out["initial_list_status"] = s.map(mapping).fillna(-1).astype(int)
 
-    #  application_type: "individual" or "joint type"/"joint app" -> binary (joint=1, individual=0)
+    # application_type: joint -> 1, individual -> 0 (else -1)
     if "application_type" in out.columns:
         s = _norm_str(out["application_type"])
-        mapping = {
-            "individual": 0,
-            "joint type": 1,
-            "joint app": 1,
-            "joint": 1,
-        }
+        mapping = {"individual": 0, "joint type": 1, "joint app": 1, "joint": 1}
         out["application_type"] = s.map(mapping).fillna(-1).astype(int)
 
-    #  disbursement_method: "cash" / "directpay" -> binary (directpay=1, cash=0)
+    # disbursement_method: directpay=1, cash=0 (else -1)
     if "disbursement_method" in out.columns:
         s = _norm_str(out["disbursement_method"])
         mapping = {"cash": 0, "directpay": 1}
@@ -148,6 +130,10 @@ def preprocess_loan_features(
     for perc_col in ("int_rate", "revol_util"):
         _coerce_percent(perc_col)
 
+    if "fico_range_low" in out.columns and "fico_range_high" in out.columns:
+        out["fico_avg"] = (out["fico_range_low"] + out["fico_range_high"]) / 2.0
+        out.drop(columns=["fico_range_low", "fico_range_high"], inplace=True)
+
     for col in out.select_dtypes(include=["object"]).columns.tolist():
         if exclude_cols and col in exclude_cols:
             continue
@@ -165,5 +151,31 @@ def preprocess_loan_features(
         else:
             cat = pd.Categorical(_norm_str(out[col]))
             out[col] = pd.Series(cat.codes, index=out.index).astype(int)
+
+    manual_drop = [
+        "funded_amnt",
+        "funded_amnt_inv",
+        "out_prncp_inv",
+        "total_pymnt_inv",
+        "num_sats",
+        "num_rev_tl_bal_gt_0",
+        "collection_recovery_fee",
+    ]
+    keep = [c for c in manual_drop if c in out.columns]
+    if keep:
+        out.drop(columns=keep, inplace=True, errors="ignore")
+
+    if "policy_code" in out.columns and out["policy_code"].nunique() <= 1:
+        out.drop(columns=["policy_code"], inplace=True)
+
+    num = out.drop(columns=list(exclude_cols), errors="ignore").select_dtypes(
+        include=[np.number]
+    )
+    if num.shape[1] > 1:
+        corr = num.corr().abs()
+        upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+        to_drop = [c for c in upper.columns if (upper[c] >= 0.999).any()]
+        if to_drop:
+            out.drop(columns=to_drop, inplace=True, errors="ignore")
 
     return out
