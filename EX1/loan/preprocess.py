@@ -133,7 +133,7 @@ def preprocess_loan_features(
         mapping = {"cash": 0, "directpay": 1}
         out["disbursement_method"] = s.map(mapping).fillna(-1).astype(int)
 
-    # Convert common percentage-like columns if present (strip '%' and coerce to float)
+    # Convert common percentage-like columns if present
     def _coerce_percent(col: str):
         if col in out.columns and pd.api.types.is_object_dtype(out[col]):
             s = (
