@@ -1,0 +1,4 @@
+model_name,randsearch_time
+mlp_smote,140.75097513198853
+mlp_nosmote,304.58572793006897
+mlp_smote_unscaled,167.12782096862793
